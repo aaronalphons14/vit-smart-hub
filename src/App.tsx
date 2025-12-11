@@ -22,8 +22,8 @@ const App = () => (
       <ChargerProvider>
         <Toaster />
         <Sonner />
-        <EmergencyOverlay />
         <BrowserRouter>
+          <EmergencyOverlay />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<LoginPage />} />
