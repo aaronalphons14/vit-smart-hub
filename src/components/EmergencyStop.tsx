@@ -14,9 +14,10 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export function EmergencyStop() {
-  const { triggerEmergencyStop, isEmergencyStop } = useCharger();
+  const { triggerEmergencyStop, isEmergencyStop, chargingSession } = useCharger();
 
-  if (isEmergencyStop) return null;
+  // Only show when charging is active (timer is running)
+  if (isEmergencyStop || !chargingSession?.isActive) return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-50">

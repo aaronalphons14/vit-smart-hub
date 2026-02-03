@@ -54,7 +54,7 @@ export default function WelcomePage() {
       </main>
 
       <footer className="text-center py-4 text-muted-foreground text-sm">
-        © 2024 VIT Smart EV Charger
+        © 2026 VIT Smart EV Charger
       </footer>
     </div>
   );

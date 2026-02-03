@@ -15,13 +15,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type AdminView = 'menu' | 'monitor' | 'settings';
+type AdminView = 'menu' | 'monitor' | 'settings' | 'users';
 
 export default function AdminPage() {
   const [view, setView] = useState<AdminView>('menu');
   const [editDurations, setEditDurations] = useState({ short: 30, medium: 60, long: 90 });
+  const [newUserCode, setNewUserCode] = useState('');
+  const [codeToDelete, setCodeToDelete] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { allSessions, durations, setDurations, logout } = useCharger();
+  const { allSessions, durations, setDurations, logout, addUserCode, removeUserCode, getAllUserCodes } = useCharger();
 
   const handleSaveDurations = () => {
     setDurations(editDurations);
@@ -41,11 +43,171 @@ export default function AdminPage() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleAddUser = () => {
+    if (newUserCode.length !== 4) {
+      toast.error("Code must be exactly 4 digits");
+      return;
+    }
+
+    const success = addUserCode(newUserCode);
+    if (success) {
+      toast.success(`User ${newUserCode} added successfully`);
+      setNewUserCode('');
+    } else {
+      toast.error("Code already exists or is invalid");
+    }
+  };
+
+  const handleDeleteUser = (code: string) => {
+    setCodeToDelete(code);
+  };
+
+  const confirmDeleteUser = () => {
+    if (codeToDelete) {
+      const success = removeUserCode(codeToDelete);
+      if (success) {
+        toast.success(`User ${codeToDelete} removed successfully`);
+      } else {
+        toast.error("Cannot remove this user");
+      }
+      setCodeToDelete(null);
+    }
+  };
+
+  if (view === 'users') {
+    const userCodes = getAllUserCodes();
+
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+
+        <main className="flex-1 px-6 pb-20 max-w-2xl mx-auto w-full">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="font-display text-2xl text-foreground flex items-center gap-2">
+              <Users className="w-6 h-6 text-primary" />
+              Manage Users
+            </h2>
+            <EVButton variant="ghost" size="sm" onClick={() => setView('menu')}>
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </EVButton>
+          </div>
+
+          {/* Add User Form */}
+          <div className="p-6 rounded-lg bg-card border border-border mb-6 animate-fade-in">
+            <h3 className="font-display text-lg text-foreground mb-4">Add New User</h3>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <Input
+                  type="text"
+                  placeholder="Enter 4-digit code"
+                  value={newUserCode}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                    setNewUserCode(value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleAddUser();
+                  }}
+                  className="bg-secondary border-border font-display text-lg text-center"
+                  maxLength={4}
+                />
+              </div>
+              <EVButton
+                variant="electric"
+                size="lg"
+                onClick={handleAddUser}
+                disabled={newUserCode.length !== 4}
+              >
+                Add User
+              </EVButton>
+            </div>
+          </div>
+
+          {/* User List */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display text-lg text-foreground">
+                Registered Users ({userCodes.length})
+              </h3>
+            </div>
+
+            {userCodes.length === 0 ? (
+              <div className="text-center py-12 animate-fade-in">
+                <div className="inline-block p-6 rounded-full bg-muted mb-4">
+                  <Users className="w-12 h-12 text-muted-foreground" />
+                </div>
+                <p className="text-muted-foreground">No users registered</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {userCodes.map((code, index) => {
+                  const hasActiveSession = allSessions.some(s => s.userId.includes(code) && s.isActive);
+
+                  return (
+                    <div
+                      key={code}
+                      className="p-4 rounded-lg bg-card border border-border hover:border-primary/50 transition-all animate-fade-in flex items-center justify-between"
+                      style={{ animationDelay: `${index * 0.05}s` }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                          <span className="font-display text-primary font-bold">{code}</span>
+                        </div>
+                        <div>
+                          <p className="font-display text-foreground">User Code: {code}</p>
+                          {hasActiveSession && (
+                            <p className="text-xs text-success flex items-center gap-1">
+                              <Battery className="w-3 h-3" />
+                              Currently charging
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <EVButton
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleDeleteUser(code)}
+                      >
+                        Delete
+                      </EVButton>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </main>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={codeToDelete !== null} onOpenChange={() => setCodeToDelete(null)}>
+          <DialogContent className="bg-card border-border">
+            <DialogHeader>
+              <DialogTitle className="font-display">Confirm Deletion</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete user code <span className="font-display text-foreground">{codeToDelete}</span>?
+                This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex gap-3 justify-end mt-4">
+              <EVButton variant="ghost" onClick={() => setCodeToDelete(null)}>
+                Cancel
+              </EVButton>
+              <EVButton variant="danger" onClick={confirmDeleteUser}>
+                Delete User
+              </EVButton>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
   if (view === 'monitor') {
     return (
       <div className="min-h-screen flex flex-col">
         <Header />
-        
+
         <main className="flex-1 px-6 pb-20 max-w-2xl mx-auto w-full">
           <div className="flex items-center justify-between mb-8">
             <h2 className="font-display text-2xl text-foreground flex items-center gap-2">
@@ -85,15 +247,14 @@ export default function AdminPage() {
                         </p>
                       </div>
                     </div>
-                    <div className={`px-3 py-1 rounded-full text-xs font-display ${
-                      session.isActive 
-                        ? 'bg-success/20 text-success' 
-                        : 'bg-muted text-muted-foreground'
-                    }`}>
+                    <div className={`px-3 py-1 rounded-full text-xs font-display ${session.isActive
+                      ? 'bg-success/20 text-success'
+                      : 'bg-muted text-muted-foreground'
+                      }`}>
                       {session.isActive ? 'Charging' : 'Complete'}
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Clock className="w-4 h-4" />
@@ -103,12 +264,12 @@ export default function AdminPage() {
                       {formatTime(session.remainingSeconds)}
                     </span>
                   </div>
-                  
+
                   <div className="mt-3 h-2 bg-secondary rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gradient-charging rounded-full transition-all"
-                      style={{ 
-                        width: `${((session.duration * 60 - session.remainingSeconds) / (session.duration * 60)) * 100}%` 
+                      style={{
+                        width: `${((session.duration * 60 - session.remainingSeconds) / (session.duration * 60)) * 100}%`
                       }}
                     />
                   </div>
@@ -125,7 +286,7 @@ export default function AdminPage() {
     return (
       <div className="min-h-screen flex flex-col">
         <Header />
-        
+
         <main className="flex-1 px-6 pb-20 max-w-md mx-auto w-full">
           <div className="flex items-center justify-between mb-8">
             <h2 className="font-display text-2xl text-foreground flex items-center gap-2">
@@ -153,7 +314,7 @@ export default function AdminPage() {
                     className="bg-secondary border-border font-display text-lg"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="medium" className="font-display text-sm text-muted-foreground mb-2 block">
                     Medium Duration (minutes)
@@ -166,7 +327,7 @@ export default function AdminPage() {
                     className="bg-secondary border-border font-display text-lg"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="long" className="font-display text-sm text-muted-foreground mb-2 block">
                     Long Duration (minutes)
@@ -181,7 +342,7 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
-            
+
             <EVButton
               variant="electric"
               size="xl"
@@ -200,7 +361,7 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      
+
       <main className="flex-1 flex flex-col items-center justify-center px-6 pb-20">
         <div className="text-center mb-10 animate-fade-in">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-warning/20 text-warning mb-4">
@@ -229,12 +390,23 @@ export default function AdminPage() {
           <EVButton
             variant="outline"
             size="xl"
+            onClick={() => setView('users')}
+            className="w-full animate-fade-in"
+            style={{ animationDelay: '0.1s' }}
+          >
+            <Users className="w-5 h-5" />
+            Manage Users
+          </EVButton>
+
+          <EVButton
+            variant="outline"
+            size="xl"
             onClick={() => {
               setEditDurations(durations);
               setView('settings');
             }}
             className="w-full animate-fade-in"
-            style={{ animationDelay: '0.1s' }}
+            style={{ animationDelay: '0.2s' }}
           >
             <Settings className="w-5 h-5" />
             Modify Durations
@@ -245,7 +417,7 @@ export default function AdminPage() {
             size="xl"
             onClick={handleLogout}
             className="w-full animate-fade-in"
-            style={{ animationDelay: '0.2s' }}
+            style={{ animationDelay: '0.3s' }}
           >
             <LogOut className="w-5 h-5" />
             Exit

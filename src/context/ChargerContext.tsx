@@ -17,19 +17,22 @@ interface ChargerContextType {
   currentRole: UserRole | null;
   login: (code: string) => { success: boolean; role?: UserRole };
   logout: () => void;
-  
+  addUserCode: (code: string) => boolean;
+  removeUserCode: (code: string) => boolean;
+  getAllUserCodes: () => string[];
+
   // Charging
   durations: { short: number; medium: number; long: number };
   setDurations: (durations: { short: number; medium: number; long: number }) => void;
   chargingSession: ChargingSession | null;
   startCharging: (duration: number, userId: string) => void;
   stopCharging: (code: string) => boolean;
-  
+
   // Emergency
   isEmergencyStop: boolean;
   triggerEmergencyStop: () => void;
   resetEmergencyStop: () => void;
-  
+
   // All sessions for admin monitoring
   allSessions: ChargingSession[];
 }
@@ -37,7 +40,11 @@ interface ChargerContextType {
 const ChargerContext = createContext<ChargerContextType | undefined>(undefined);
 
 export function ChargerProvider({ children }: { children: React.ReactNode }) {
-  const [userCodes] = useState<string[]>(DEFAULT_USER_CODES);
+  // Load user codes from localStorage or use defaults
+  const [userCodes, setUserCodes] = useState<string[]>(() => {
+    const saved = localStorage.getItem('vit-charger-user-codes');
+    return saved ? JSON.parse(saved) : DEFAULT_USER_CODES;
+  });
   const [adminCode] = useState<string>(DEFAULT_ADMIN_CODE);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [currentRole, setCurrentRole] = useState<UserRole | null>(null);
@@ -45,7 +52,7 @@ export function ChargerProvider({ children }: { children: React.ReactNode }) {
   const [chargingSession, setChargingSession] = useState<ChargingSession | null>(null);
   const [isEmergencyStop, setIsEmergencyStop] = useState(false);
   const [allSessions, setAllSessions] = useState<ChargingSession[]>([]);
-  
+
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const login = useCallback((code: string) => {
@@ -94,6 +101,40 @@ export function ChargerProvider({ children }: { children: React.ReactNode }) {
     setChargingSession(null);
   }, []);
 
+  // User management functions
+  const addUserCode = useCallback((code: string) => {
+    // Validate code format (4 digits)
+    if (!/^\d{4}$/.test(code)) {
+      return false;
+    }
+
+    // Check if code already exists
+    if (userCodes.includes(code) || code === adminCode) {
+      return false;
+    }
+
+    const newCodes = [...userCodes, code];
+    setUserCodes(newCodes);
+    localStorage.setItem('vit-charger-user-codes', JSON.stringify(newCodes));
+    return true;
+  }, [userCodes, adminCode]);
+
+  const removeUserCode = useCallback((code: string) => {
+    // Prevent removing admin code
+    if (code === adminCode) {
+      return false;
+    }
+
+    const newCodes = userCodes.filter(c => c !== code);
+    setUserCodes(newCodes);
+    localStorage.setItem('vit-charger-user-codes', JSON.stringify(newCodes));
+    return true;
+  }, [userCodes, adminCode]);
+
+  const getAllUserCodes = useCallback(() => {
+    return [...userCodes];
+  }, [userCodes]);
+
   // Timer effect
   useEffect(() => {
     if (chargingSession?.isActive && !isEmergencyStop) {
@@ -103,7 +144,7 @@ export function ChargerProvider({ children }: { children: React.ReactNode }) {
             return prev ? { ...prev, remainingSeconds: 0, isActive: false } : null;
           }
           const updated = { ...prev, remainingSeconds: prev.remainingSeconds - 1 };
-          setAllSessions(sessions => 
+          setAllSessions(sessions =>
             sessions.map(s => s.userId === prev.userId ? updated : s)
           );
           return updated;
@@ -126,6 +167,9 @@ export function ChargerProvider({ children }: { children: React.ReactNode }) {
       currentRole,
       login,
       logout,
+      addUserCode,
+      removeUserCode,
+      getAllUserCodes,
       durations,
       setDurations,
       chargingSession,
